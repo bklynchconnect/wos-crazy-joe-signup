@@ -26,7 +26,21 @@ def connect_to_sheet():
 
 def load_data(sheet):
     data = sheet.get_all_records()
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+
+    # Ensure required columns exist
+    required_cols = ["Player", "Targets"]
+
+    if df.empty:
+        df = pd.DataFrame(columns=required_cols)
+    else:
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = ""
+
+        df = df[required_cols]
+
+    return df
 
 def save_data(sheet, df):
     sheet.clear()
