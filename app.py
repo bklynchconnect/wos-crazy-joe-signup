@@ -158,4 +158,4 @@ def highlight_unassigned(row):
 
 styled_df = df.style.apply(highlight_unassigned, axis=1)
 
-st.dataframe(styled_df[['Player','Reinforcing','Incoming']], use_container_width=True)
+st.dataframe(styled_df, use_container_width=True)
