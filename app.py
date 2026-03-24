@@ -115,6 +115,7 @@ df["Incoming"] = df["Player"].map(incoming_counts)
 
 # --- DISPLAY TABLE ---
 st.subheader("📋 Current Assignments")
+st.text("Anyone highlighted in red does not have any reinforcements assigned.")
 def highlight_unassigned(row):
     if row["Incoming"] == 0:
         return ["background-color: #ff4d4d"] * len(row)
@@ -122,5 +123,4 @@ def highlight_unassigned(row):
 
 styled_df = df.style.apply(highlight_unassigned, axis=1)
 
-st.subheader("📋 Current Assignments")
 st.dataframe(styled_df, use_container_width=True)
