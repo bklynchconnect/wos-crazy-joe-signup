@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 from streamlit_autorefresh import st_autorefresh
+import numpy as np
 
 st_autorefresh(interval=120000, key="datarefresh")
 
@@ -32,8 +33,7 @@ def load_data(sheet):
     df = pd.DataFrame(data)
 
     # Ensure required columns exist
-    required_cols = ["Player", "Reinforcing"]
-
+    required_cols = ["Player", "X", "Y", "Reinforcing"]
     if df.empty:
         df = pd.DataFrame(columns=required_cols)
     else:
@@ -65,21 +65,48 @@ if df.empty:
     df = pd.DataFrame(columns=["Player", "Reinforcing"])
 
 # --- USER INPUT ---
-player_name = st.text_input("Enter your player name")
+player_name = st.text_input("Enter your player name and city coordinates")
 
-if player_name:
-    if player_name not in df["Player"].values:
-        if st.button("Join Event"):
-            df = pd.concat([df, pd.DataFrame([{
-                "Player": player_name,
-                "Reinforcing": ""
-            }])], ignore_index=True)
-            save_data(sheet, df)
-            st.success("Joined event!")
-            st.rerun()
+col1, col2 = st.columns(2)
+x_coord = col1.number_input("X", value=0)
+y_coord = col2.number_input("Y", value=0)
+
+if player_name not in df["Player"].values:
+    if st.button("Join Event"):
+        df = pd.concat([df, pd.DataFrame([{
+            "Player": player_name,
+            "X": x_coord,
+            "Y": y_coord,
+            "Reinforcing": ""
+        }])], ignore_index=True)
+
+        save_data(sheet, df)
+        st.success("Joined event!")
+        st.rerun()
 
 # Refresh df
 df = load_data(sheet)
+
+# --- DISTANCE CALCULATION ---
+if player_name in df["Player"].values:
+    df["X"] = pd.to_numeric(df["X"], errors="coerce")
+    df["Y"] = pd.to_numeric(df["Y"], errors="coerce")
+
+    player_row = df[df["Player"] == player_name].iloc[0]
+    px, py = player_row["X"], player_row["Y"]
+
+    def compute_distance(row):
+        if row["Player"] == player_name:
+            return 0
+        return np.sqrt((row["X"] - px)**2 + (row["Y"] - py)**2)
+
+    df["Distance"] = df.apply(compute_distance, axis=1)
+
+    # Sort by distance
+    df = df.sort_values(by="Distance")
+    df["Distance"] = df["Distance"].round(2)
+else:
+    df["Distance"] = None
 
 # --- SELECT TARGETS ---
 if player_name in df["Player"].values:
@@ -131,4 +158,4 @@ def highlight_unassigned(row):
 
 styled_df = df.style.apply(highlight_unassigned, axis=1)
 
-st.dataframe(styled_df, use_container_width=True)
+st.dataframe(styled_df[['Player','Reinforcing','Incoming']], use_container_width=True)
