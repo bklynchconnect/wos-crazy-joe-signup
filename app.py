@@ -89,7 +89,7 @@ if player_name not in df["Player"].values:
             "Reinforcing": ""
         }])], ignore_index=True)
 
-        save_player(sheet, player_name, x_coord, y_coord, "")
+        save_player("responses", player_name, x_coord, y_coord, "")
         st.success("Joined event!")
         st.rerun()
 
