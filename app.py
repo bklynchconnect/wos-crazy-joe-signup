@@ -5,6 +5,7 @@ from google.oauth2.service_account import Credentials
 from streamlit_autorefresh import st_autorefresh
 import numpy as np
 
+# --- AUTO REFRESH EVERY 2 MINUTES ---
 st_autorefresh(interval=120000, key="datarefresh")
 
 # --- CONFIG ---
@@ -18,16 +19,15 @@ def connect_to_sheet():
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
-
     creds = Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=scope
     )
-
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME).worksheet(WORKSHEET_NAME)
     return sheet
 
+# --- LOAD DATA ---
 def load_data(sheet):
     data = sheet.get_all_records()
     df = pd.DataFrame(data)
@@ -40,47 +40,43 @@ def load_data(sheet):
         for col in required_cols:
             if col not in df.columns:
                 df[col] = ""
-
         df = df[required_cols]
 
-    return df 
+    return df
 
+# --- SAVE SINGLE PLAYER (SAFE, NO CLEAR) ---
 def save_player(sheet, player_name, x, y, targets):
     records = sheet.get_all_records()
-
-    # Find if player exists
+    found = False
     for i, row in enumerate(records):
         if row["Player"] == player_name:
-            # Update existing row (add +2 because sheet is 1-indexed + header)
             sheet.update(f"A{i+2}:D{i+2}", [[player_name, x, y, targets]])
-            return
-
-    # If not found → append
-    sheet.append_row([player_name, x, y, targets])
+            found = True
+            break
+    if not found:
+        sheet.append_row([player_name, x, y, targets])
 
 # --- APP ---
 st.title("🔥 Alliance Troop Coordination")
 st.markdown(
     """
-    1. Enter your player name and click on Join Event.
-    2. Select players from the list who you will reinforce and click Save Targets.
+    1. Enter your player name and city coordinates and click 'Join Event'.
+    2. Select players from the list to reinforce and click 'Save Targets'.
     """
-            )
+)
+
 sheet = connect_to_sheet()
 df = load_data(sheet)
 
-# Ensure structure
-if df.empty:
-    df = pd.DataFrame(columns=["Player", "Reinforcing"])
-
 # --- USER INPUT ---
-player_name = st.text_input("Enter your player name and city coordinates")
+st.subheader("Join Event")
+player_name = st.text_input("Enter your player name")
 
 col1, col2 = st.columns(2)
-x_coord = col1.number_input("X", value=0)
-y_coord = col2.number_input("Y", value=0)
+x_coord = col1.number_input("X Coordinate", value=0)
+y_coord = col2.number_input("Y Coordinate", value=0)
 
-if player_name not in df["Player"].values:
+if player_name and player_name not in df["Player"].values:
     if st.button("Join Event"):
         df = pd.concat([df, pd.DataFrame([{
             "Player": player_name,
@@ -88,8 +84,8 @@ if player_name not in df["Player"].values:
             "Y": y_coord,
             "Reinforcing": ""
         }])], ignore_index=True)
-
-        save_player("responses", player_name, x_coord, y_coord, "")
+        # Save with empty targets on join
+        save_player(sheet, player_name, x_coord, y_coord, "")
         st.success("Joined event!")
         st.rerun()
 
@@ -109,16 +105,14 @@ if player_name in df["Player"].values:
             return 0
         return np.sqrt((row["X"] - px)**2 + (row["Y"] - py)**2)
 
-    df["Distance"] = df.apply(compute_distance, axis=1)
-
-    # Sort by distance
+    df["Distance"] = df.apply(compute_distance, axis=1).round(2)
     df = df.sort_values(by="Distance")
-    df["Distance"] = df["Distance"].round(2)
 else:
     df["Distance"] = None
 
 # --- SELECT TARGETS ---
 if player_name in df["Player"].values:
+    st.subheader("Select Reinforcement Targets")
     other_players = [p for p in df["Player"] if p != player_name]
 
     current_targets = df.loc[
@@ -133,19 +127,18 @@ if player_name in df["Player"].values:
         default=current_targets
     )
 
-    # --- VALIDATION ---
+    # Validation
     if len(selected) > MAX_TARGETS:
         st.error(f"You can only select up to {MAX_TARGETS} players.")
     else:
         st.caption(f"{len(selected)} / {MAX_TARGETS} targets selected")
-
         if st.button("Save Targets"):
             df.loc[df["Player"] == player_name, "Reinforcing"] = ",".join(selected)
-            save_data(sheet, df)
+            save_player(sheet, player_name, x_coord, y_coord, ",".join(selected))
             st.success("Saved!")
             st.rerun()
 
-# --- COMPUTE INCOMING TARGET COUNTS ---
+# --- COMPUTE INCOMING REINFORCEMENTS ---
 incoming_counts = {player: 0 for player in df["Player"]}
 
 for _, row in df.iterrows():
@@ -159,7 +152,8 @@ df["Incoming"] = df["Player"].map(incoming_counts)
 
 # --- DISPLAY TABLE ---
 st.subheader("📋 Current Assignments")
-st.text("Anyone highlighted in red does not have any reinforcements assigned.")
+st.text("Players highlighted in red have no incoming reinforcements.")
+
 def highlight_unassigned(row):
     if row["Incoming"] == 0:
         return ["background-color: #ff4d4d"] * len(row)
