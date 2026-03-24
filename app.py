@@ -50,6 +50,7 @@ def save_data(sheet, df):
 st.title("🔥 Alliance Troop Coordination")
 st.markdown(
     """1. Enter your player name and click on Join Event.
+    
     2. Select players from the list who you will reinforce and click Save Targets."""
             )
 sheet = connect_to_sheet()
