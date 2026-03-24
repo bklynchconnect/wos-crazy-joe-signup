@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
+from streamlit_autorefresh import st_autorefresh
+
+st_autorefresh(interval=120000, key="datarefresh")
 
 # --- CONFIG ---
 SHEET_NAME = "wos_crazyjoe_signup"
