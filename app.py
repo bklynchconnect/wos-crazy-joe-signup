@@ -45,9 +45,18 @@ def load_data(sheet):
 
     return df 
 
-def save_data(sheet, df):
-    sheet.clear()
-    sheet.update([df.columns.values.tolist()] + df.values.tolist())
+def save_player(sheet, player_name, x, y, targets):
+    records = sheet.get_all_records()
+
+    # Find if player exists
+    for i, row in enumerate(records):
+        if row["Player"] == player_name:
+            # Update existing row (add +2 because sheet is 1-indexed + header)
+            sheet.update(f"A{i+2}:D{i+2}", [[player_name, x, y, targets]])
+            return
+
+    # If not found → append
+    sheet.append_row([player_name, x, y, targets])
 
 # --- APP ---
 st.title("🔥 Alliance Troop Coordination")
